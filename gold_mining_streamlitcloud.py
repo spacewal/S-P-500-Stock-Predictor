@@ -25,13 +25,13 @@ def get_sp500_companies():
     df = html[0]
     return df[['Symbol', 'GICS Sector']]
 
-@st.cache
+@st.cache_data
 def get_sp500_tickers():
     table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
     return table[0]['Symbol'].tolist()
 
 # Cache this function so that model training isn't re-run on every rerun
-@st.cache(allow_output_mutation=True)
+@st.cache_resource(allow_output_mutation=True)
 def train_model(X_train, y_train):
     model = Sequential([
         LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
@@ -44,7 +44,7 @@ def train_model(X_train, y_train):
                          ModelCheckpoint('best_model.keras', save_best_only=True)])
     return model
 
-@st.cache
+@st.cache_data
 def fetch_data(ticker, start_date, end_date):
     data = yf.download(ticker, start=start_date, end=end_date)
     data.dropna(inplace=True)
