@@ -31,7 +31,7 @@ def get_sp500_tickers():
     return table[0]['Symbol'].tolist()
 
 # Cache this function so that model training isn't re-run on every rerun
-@st.cache_resource(allow_output_mutation=True)
+@st.cache_resource
 def train_model(X_train, y_train):
     model = Sequential([
         LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
