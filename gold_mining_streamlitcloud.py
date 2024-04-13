@@ -41,7 +41,7 @@ def train_model(X_train, y_train):
     model.compile(optimizer='adam', loss='mean_squared_error')
     model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1,
               callbacks=[EarlyStopping(monitor='val_loss', patience=5),
-                         ModelCheckpoint('best_model.h5', save_best_only=True)])
+                         ModelCheckpoint('best_model.keras', save_best_only=True)])
     return model
 
 @st.cache
