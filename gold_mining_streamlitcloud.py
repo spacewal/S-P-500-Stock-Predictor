@@ -7,21 +7,30 @@ Original file is located at
     https://colab.research.google.com/drive/1NTkM7Dfro7pX-kTdz5qOp9KPzcyW8GGF
 """
 
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import LSTM, Dense
 from keras.callbacks import EarlyStopping, ModelCheckpoint
-import streamlit as st
-from datetime import timedelta
+from datetime import datetime
+import matplotlib.pyplot as plt
+
+# Cache this function so the data isn't re-downloaded on every rerun
+def get_sp500_companies():
+    url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+    html = pd.read_html(url, header=0)
+    df = html[0]
+    return df[['Symbol', 'GICS Sector']]
 
 @st.cache
-def fetch_data(ticker, start_date, end_date):
-    return yf.download(ticker, start=start_date, end=end_date)
+def get_sp500_tickers():
+    table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+    return table[0]['Symbol'].tolist()
 
+# Cache this function so that model training isn't re-run on every rerun
 @st.cache(allow_output_mutation=True)
 def train_model(X_train, y_train):
     model = Sequential([
@@ -35,9 +44,14 @@ def train_model(X_train, y_train):
                          ModelCheckpoint('best_model.h5', save_best_only=True)])
     return model
 
-def analyze_stock(ticker):
-    data = fetch_data(ticker, '2020-01-01', '2024-01-01')
+@st.cache
+def fetch_data(ticker, start_date, end_date):
+    data = yf.download(ticker, start=start_date, end=end_date)
     data.dropna(inplace=True)
+    return data
+
+def analyze_stock(ticker):
+    data = fetch_data(ticker, '2020-01-01', datetime.today().strftime('%Y-%m-%d'))
 
     scaler = MinMaxScaler(feature_range=(0, 1))
     data_scaled = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
@@ -71,10 +85,22 @@ def analyze_stock(ticker):
 
 def main():
     st.title("S&P 500 Stock Predictor")
-    ticker = st.text_input("Enter a ticker from the S&P 500 to analyze:").upper()
 
-    if ticker:
-        analyze_stock(ticker)
+    # Fetch and cache the S&P 500 company data
+    sp500_companies = get_sp500_companies()
+    tickers = sp500_companies['Symbol'].tolist()
+
+    # Display a select box for the user to choose a ticker to analyze
+    selected_ticker = st.selectbox("Choose a ticker to analyze", [''] + tickers)
+    
+    # Display the ticker data
+    if selected_ticker:
+        st.write(f"You selected: {selected_ticker}")
+        analyze_stock(selected_ticker)
+
+    # Display the S&P 500 Dashboard
+    st.write("S&P 500 Dashboard")
+    st.table(sp500_companies)  # Display the symbols and sectors in a table
 
 if __name__ == "__main__":
     main()
