@@ -13,46 +13,56 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
-from keras.layers import LSTM, Dense
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.layers import LSTM, Dense, Dropout, BatchNormalization
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard, CSVLogger
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-# Cache this function so the data isn't re-downloaded on every rerun
+# Function to fetch S&P 500 companies and sectors
+@st.cache_resource
 def get_sp500_companies():
     url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-    html = pd.read_html(url, header=0)
-    df = html[0]
+    df = pd.read_html(url, header=0)[0]
     return df[['Symbol', 'GICS Sector']]
 
-@st.cache_data
-def get_sp500_tickers():
-    table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-    return table[0]['Symbol'].tolist()
-
-# Cache this function so that model training isn't re-run on every rerun
+# Function to fetch S&P 500 tickers list
 @st.cache_resource
-def train_model(X_train, y_train):
-    model = Sequential([
-        LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
-        LSTM(units=50),
-        Dense(1)
-    ])
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1,
-              callbacks=[EarlyStopping(monitor='val_loss', patience=5),
-                         ModelCheckpoint('best_model.keras', save_best_only=True)])
-    return model
+def get_sp500_tickers():
+    df = get_sp500_companies()
+    return df['Symbol'].tolist()
 
-@st.cache_data
+# Function to fetch stock data
+@st.cache_resource
 def fetch_data(ticker, start_date, end_date):
     data = yf.download(ticker, start=start_date, end=end_date)
     data.dropna(inplace=True)
     return data
 
+# Function to preprocess data and train LSTM model
+@st.cache_resource
+def train_model(X_train, y_train):
+    model = Sequential([
+        LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
+        LSTM(units=50, return_sequences=False),
+        Dense(1)
+    ])
+    
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    
+    callbacks = [
+        EarlyStopping(monitor='val_loss', patience=5),
+        ModelCheckpoint('best_model.h5', save_best_only=True),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
+        TensorBoard(log_dir='./logs'),
+        CSVLogger('training_log.csv')
+    ]
+    
+    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.1, callbacks=callbacks)
+    return model
+
+# Function to analyze and predict stock price
 def analyze_stock(ticker):
     data = fetch_data(ticker, '2020-01-01', datetime.today().strftime('%Y-%m-%d'))
-
     scaler = MinMaxScaler(feature_range=(0, 1))
     data_scaled = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
 
@@ -66,16 +76,17 @@ def analyze_stock(ticker):
 
     model = train_model(X_train, y_train)
 
+    # Predicting the closing prices using the trained model
     latest_scaled = scaler.transform(data['Close'].values[-60:].reshape(-1, 1))
     latest_scaled = np.reshape(latest_scaled, (1, latest_scaled.shape[0], 1))
-
     predicted = model.predict(latest_scaled)
     predicted_prices = scaler.inverse_transform(predicted)
 
-    st.subheader("Predicted vs Actual Prices")
+    # Plot the results
     plt.figure(figsize=(10, 5))
-    plt.plot(data['Close'].tail(60), color='blue', label='Actual Prices')
-    plt.plot(pd.date_range(start=data.index[-1], periods=len(predicted), freq='B'), predicted_prices, color='red', label='Predicted Prices')
+    plt.plot(data['Close'].tail(60).index, data['Close'].tail(60).values, color='blue', label='Actual Prices')
+    predicted_dates = pd.date_range(start=data.tail(1).index[0], periods=len(predicted), freq='B')
+    plt.plot(predicted_dates, predicted_prices, color='red', label='Predicted Prices')
     plt.title(f'{ticker} Stock Price Prediction')
     plt.xlabel('Date')
     plt.ylabel('Price')
@@ -83,24 +94,18 @@ def analyze_stock(ticker):
     plt.grid(True)
     st.pyplot(plt)
 
+# Main function to run the Streamlit app
 def main():
     st.title("S&P 500 Stock Predictor")
-
-    # Fetch and cache the S&P 500 company data
     sp500_companies = get_sp500_companies()
-    tickers = sp500_companies['Symbol'].tolist()
+    tickers = get_sp500_tickers()
 
-    # Display a select box for the user to choose a ticker to analyze
     selected_ticker = st.selectbox("Choose a ticker to analyze", [''] + tickers)
-    
-    # Display the ticker data
     if selected_ticker:
-        st.write(f"You selected: {selected_ticker}")
         analyze_stock(selected_ticker)
 
-    # Display the S&P 500 Dashboard
     st.write("S&P 500 Dashboard")
-    st.table(sp500_companies)  # Display the symbols and sectors in a table
+    st.table(sp500_companies)  # Display the S&P 500 dashboard
 
 if __name__ == "__main__":
     main()
