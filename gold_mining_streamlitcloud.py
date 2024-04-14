@@ -17,6 +17,7 @@ from keras.layers import LSTM, Dense, Dropout, BatchNormalization
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard, CSVLogger
 from datetime import datetime
 import matplotlib.pyplot as plt
+import mplfinance as mpf
 
 # Function to fetch S&P 500 companies and sectors
 @st.cache_resource
