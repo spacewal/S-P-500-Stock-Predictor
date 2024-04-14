@@ -82,6 +82,17 @@ def analyze_stock(ticker):
     predicted = model.predict(latest_scaled)
     predicted_prices = scaler.inverse_transform(predicted)
 
+    # Plot the results with mplfinance candlestick
+    mpf_figure = mpf.plot(data[-60:], type='candle', style='charles', volume=True, returnfig=True)
+    ax1 = mpf_figure[0].axes[0]
+    
+    # Overlaying the predicted prices
+    predicted_dates = pd.date_range(start=data.tail(1).index[0] + pd.Timedelta(days=1), periods=len(predicted), freq='B')
+    ax1.plot(predicted_dates, predicted_prices, color='red', label='Predicted Prices')
+    ax1.legend()
+    st.pyplot(mpf_figure[0])
+
+    
     # Plot the results
     plt.figure(figsize=(10, 5))
     plt.plot(data['Close'].tail(60).index, data['Close'].tail(60).values, color='blue', label='Actual Prices')
