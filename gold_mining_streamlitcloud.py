@@ -51,7 +51,7 @@ def train_model(X_train, y_train):
     
     callbacks = [
         EarlyStopping(monitor='val_loss', patience=5),
-        ModelCheckpoint('best_model.h5', save_best_only=True),
+        ModelCheckpoint('best_model.keras', save_best_only=True),
         ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
         TensorBoard(log_dir='./logs'),
         CSVLogger('training_log.csv')
